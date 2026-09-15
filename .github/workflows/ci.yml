@@ -49,19 +49,40 @@ jobs:
         shell: pwsh
         run: python tools/check_image.py build/bin/Release/fwd81core.dll --imports ntdll.dll
 
-      - name: Утилита запустится на Windows 8.1 (Debug)
+      - name: Утилиты запустятся на Windows 8.1 (Debug)
         shell: pwsh
-        run: python tools/check_image.py build/bin/Debug/fwd81cli.exe
+        run: |
+          python tools/check_image.py build/bin/Debug/fwd81cli.exe
+          python tools/check_image.py build/bin/Debug/fwd81diag.exe
 
-      - name: Утилита запустится на Windows 8.1 (Release)
+      - name: Утилиты запустятся на Windows 8.1 (Release)
         shell: pwsh
-        run: python tools/check_image.py build/bin/Release/fwd81cli.exe
+        run: |
+          python tools/check_image.py build/bin/Release/fwd81cli.exe
+          python tools/check_image.py build/bin/Release/fwd81diag.exe
 
       - name: Утилита отвечает на команду version
         shell: pwsh
         run: |
           .\build\bin\Release\fwd81cli.exe version
           if ($LASTEXITCODE -ne 0) { throw "fwd81cli version вернул $LASTEXITCODE" }
+
+      - name: docs/coverage.md соответствует пометкам в src/libs
+        shell: pwsh
+        run: python tools/exportdiff/exportdiff.py check
+
+      - name: exportdiff читает System32 раннера без ошибок (smoke-тест)
+        shell: pwsh
+        run: |
+          python tools/exportdiff/exportdiff.py export
+          if ($LASTEXITCODE -ne 0) { throw "exportdiff export вернул $LASTEXITCODE" }
+
+      - name: fwd81diag разбирает настоящий EXE и не падает
+        shell: pwsh
+        run: |
+          .\build\bin\Release\fwd81diag.exe C:\Windows\System32\notepad.exe
+          # Код 5 (вердикт невозможен без базы 8.1) — это нормально для раннера.
+          if ($LASTEXITCODE -notin 0,3,4,5) { throw "fwd81diag дал неожиданный код $LASTEXITCODE" }
 
       - name: Сохранить собранное
         uses: actions/upload-artifact@v4

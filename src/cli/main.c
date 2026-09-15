@@ -76,9 +76,9 @@ static void PrintUsage(void)
         L"Работает сейчас:\n"
         L"  version              версия и состояние сборки\n"
         L"  help                 эта справка\n"
+        L"  diag [--verbose] <exe>  разбор программы: запустится ли она на 8.1\n"
         L"\n"
         L"Запланировано (сейчас команда честно откажется работать):\n"
-        L"  diag <exe>           разбор программы: запустится ли она на 8.1   [веха M1]\n"
         L"  enable <exe>         включить Fwd81 для программы через реестр    [веха M2]\n"
         L"  disable <exe>        выключить Fwd81 для программы                [веха M2]\n"
         L"  run <exe> [аргументы]  разовый запуск без записи в реестр         [веха M3]\n"
@@ -95,6 +95,60 @@ static int NotImplemented(const wchar_t *message)
 {
     OutText(message);
     return FWD81_EXIT_NOT_IMPLEMENTED;
+}
+
+// `fwd81cli diag ...` не дублирует разбор PE, а зовёт fwd81diag.exe — анализ
+// живёт в одном месте (правило «одна сущность — один путь»). Ищем его рядом с
+// собой: обе программы кладутся в один каталог.
+static int RunDiag(int argc, wchar_t **argv)
+{
+    wchar_t self[MAX_PATH];
+    wchar_t *last_slash;
+    wchar_t command[32768];  // потолок командной строки Windows
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+    DWORD length;
+    DWORD exit_code = FWD81_EXIT_USAGE;
+    int i;
+
+    length = GetModuleFileNameW(NULL, self, MAX_PATH);
+    if (length == 0 || length >= MAX_PATH) {
+        OutText(L"Не удалось определить собственный путь для запуска fwd81diag.\n");
+        return FWD81_EXIT_USAGE;
+    }
+
+    last_slash = wcsrchr(self, L'\\');
+    if (last_slash == NULL) {
+        OutText(L"Не удалось определить каталог для запуска fwd81diag.\n");
+        return FWD81_EXIT_USAGE;
+    }
+    *(last_slash + 1) = L'\0';
+
+    // Собираем: "<каталог>\fwd81diag.exe" <аргументы после `diag`>.
+    command[0] = L'\0';
+    wcscat_s(command, 32768, L"\"");
+    wcscat_s(command, 32768, self);
+    wcscat_s(command, 32768, L"fwd81diag.exe\"");
+    for (i = 2; i < argc; i++) {
+        wcscat_s(command, 32768, L" \"");
+        wcscat_s(command, 32768, argv[i]);
+        wcscat_s(command, 32768, L"\"");
+    }
+
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+
+    if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+        OutText(L"Не удалось запустить fwd81diag.exe (он должен лежать рядом с fwd81cli).\n");
+        return FWD81_EXIT_USAGE;
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    GetExitCodeProcess(pi.hProcess, &exit_code);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    return (int)exit_code;
 }
 
 int wmain(int argc, wchar_t **argv)
@@ -123,9 +177,13 @@ int wmain(int argc, wchar_t **argv)
         return FWD81_EXIT_OK;
     }
 
-    if (_wcsicmp(command, L"diag") == 0)
-        return NotImplemented(L"Команда `diag` появится в вехе M1 (анализатор программ).\n"
-                              L"Сейчас она ничего не делает — сообщаю честно, а не молчу.\n");
+    if (_wcsicmp(command, L"diag") == 0) {
+        if (argc < 3) {
+            OutText(L"Использование: fwd81cli diag [--verbose] <путь-к-программе.exe>\n");
+            return FWD81_EXIT_USAGE;
+        }
+        return RunDiag(argc, argv);
+    }
 
     if (_wcsicmp(command, L"enable") == 0 || _wcsicmp(command, L"disable") == 0)
         return NotImplemented(L"Команды `enable` и `disable` появятся в вехе M2\n"

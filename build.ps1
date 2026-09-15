@@ -212,6 +212,13 @@ if (-not $NoChecks) {
             if ($LASTEXITCODE -ne 0) {
                 Stop-WithError 'утилита не прошла проверку, подробности выше.'
             }
+
+            Write-Step "Проверка fwd81diag.exe ($configuration): требуемая версия Windows"
+            & $interpreter @pythonArguments (Join-Path $root 'tools\check_image.py') `
+                (Join-Path $binDirectory 'fwd81diag.exe')
+            if ($LASTEXITCODE -ne 0) {
+                Stop-WithError 'анализатор fwd81diag не прошёл проверку, подробности выше.'
+            }
         }
     }
 }

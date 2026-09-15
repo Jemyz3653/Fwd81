@@ -78,5 +78,6 @@ endfunction()
 
 add_subdirectory(src/core)
 add_subdirectory(src/cli)
+add_subdirectory(src/diag)
 
-message(STATUS "Fwd81 ${PROJECT_VERSION}: цели — fwd81core.dll, fwd81cli.exe")
+message(STATUS "Fwd81 ${PROJECT_VERSION}: цели — fwd81core.dll, fwd81cli.exe, fwd81diag.exe")

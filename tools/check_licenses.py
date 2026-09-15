@@ -67,12 +67,24 @@ CHECKED_SUFFIXES = {
 }
 CHECKED_NAMES = {"CMakeLists.txt"}
 
-SKIPPED_DIRECTORIES = {".git", "build", "out", "data", "__pycache__", ".vs"}
+SKIPPED_DIRECTORIES = {
+    ".git", "build", "out", "data", "__pycache__", ".vs",
+    # Заготовки exportdiff — производное от данных 8.1, тысячи автогенерируемых
+    # файлов, не рабочий исходник. У них своя SPDX-шапка, но проверять их незачем.
+    "_generated_stubs",
+}
 
-# Этот скрипт обязан называть обе лицензии — он их сравнивает. Поэтому проверка
-# «нет упоминания чужой лицензии» для него самого отключена. Дырка ровно одна,
-# названа поимённо и касается только самого сторожа.
-FOREIGN_CHECK_EXEMPT = {"tools/check_licenses.py"}
+# Проверка «нет упоминания чужой лицензии» ловит перенос кода между зонами. Но
+# два файла обязаны называть обе лицензии по существу своей работы, и для них она
+# отключена. Оба исключения названы поимённо; проверка правильной SPDX-шапки
+# самого файла при этом остаётся в силе.
+#   * check_licenses.py — этот сторож, он лицензии сравнивает;
+#   * exportdiff.py — генератор: пишет LGPL-шапку в заготовки src/libs, которые
+#     сам же создаёт, поэтому строка LGPL в нём — данные, а не заимствование.
+FOREIGN_CHECK_EXEMPT = {
+    "tools/check_licenses.py",
+    "tools/exportdiff/exportdiff.py",
+}
 
 SPDX_PATTERN = re.compile(r"SPDX-License-Identifier:\s*(\S+)")
 FOREIGN_PATTERNS = {
