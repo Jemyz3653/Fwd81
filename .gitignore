@@ -1,0 +1,27 @@
+# Каталог сборки
+/build/
+/out/
+
+# Мусор Visual Studio
+.vs/
+*.user
+*.suo
+*.pdb.tmp
+
+# Резервные копии, которые создаёт `fwd81cli patch`
+*.orig
+
+# Копия System32 из Windows 8.1: сотни мегабайт системных DLL.
+# В репозиторий не кладём никогда — только сам каталог, чтобы путь существовал.
+/data/system32-win81/*
+!/data/system32-win81/.gitkeep
+
+# Выгрузки exportdiff. Появятся в вехе M1; решение, класть ли их в репозиторий,
+# принимаем тогда же (см. docs/ЖУРНАЛ.md, запись от 15.09.2026).
+/data/exports-*.json
+/data/missing.json
+/data/coverage.json
+
+# Python
+__pycache__/
+*.pyc
