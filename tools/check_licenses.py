@@ -24,6 +24,16 @@ import re
 import sys
 from pathlib import Path
 
+# На некоторых машинах стандартный вывод Python по умолчанию не UTF-8 (у
+# Windows-раннеров GitHub это cp1252), и печать кириллицы падает с
+# UnicodeEncodeError. Переключаем вывод на UTF-8 сами, чтобы скрипт не зависел от
+# окружения. Потоки, которые так не умеют, тихо пропускаем.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        pass
+
 LGPL = "LGPL-2.1-or-later"
 MIT = "MIT"
 

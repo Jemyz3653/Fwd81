@@ -85,6 +85,8 @@ static void PrintUsage(void)
         L"  patch <exe>          понизить требование к версии Windows в файле [веха M6]\n"
         L"  list                 список программ, для которых включён Fwd81   [веха M6]\n"
         L"  log                  показать журнал работы ядра                  [веха M2]\n"
+        L"  uninstall            убрать fwd81core.dll из System32 и очистить\n"
+        L"                       все ключи реестра IFEO                        [веха M2]\n"
         L"\n"
         L"Коды возврата: 0 — успех, 1 — ошибка в команде, 2 — ещё не реализовано.\n");
 }
@@ -141,6 +143,11 @@ int wmain(int argc, wchar_t **argv)
 
     if (_wcsicmp(command, L"log") == 0)
         return NotImplemented(L"Команда `log` появится в вехе M2 (журнал работы ядра).\n");
+
+    if (_wcsicmp(command, L"uninstall") == 0)
+        return NotImplemented(L"Команда `uninstall` появится в вехе M2.\n"
+                              L"Она уберёт fwd81core.dll из System32 и вычистит все ключи\n"
+                              L"реестра IFEO, которые создавал Fwd81. Удаление будет полным.\n");
 
     OutText(L"Неизвестная команда. Запусти `fwd81cli help`.\n");
     return FWD81_EXIT_USAGE;
