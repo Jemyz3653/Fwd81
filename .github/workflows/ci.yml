@@ -81,8 +81,12 @@ jobs:
         shell: pwsh
         run: |
           .\build\bin\Release\fwd81diag.exe C:\Windows\System32\notepad.exe
+          $code = $LASTEXITCODE
           # Код 5 (вердикт невозможен без базы 8.1) — это нормально для раннера.
-          if ($LASTEXITCODE -notin 0,3,4,5) { throw "fwd81diag дал неожиданный код $LASTEXITCODE" }
+          # Ловим только настоящую поломку разбора (например, 2 «не прочитать»).
+          if ($code -notin 0,3,4,5) { throw "fwd81diag дал неожиданный код $code" }
+          # Иначе шаг унаследовал бы ненулевой код возврата fwd81diag и упал бы зря.
+          exit 0
 
       - name: Сохранить собранное
         uses: actions/upload-artifact@v4
