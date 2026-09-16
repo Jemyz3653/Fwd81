@@ -2,12 +2,15 @@
 //
 // fwd81cli.exe -- command line tool of Fwd81.
 //
-// STATUS: milestone M0. Only `version` and `help` do real work. Every other
-// command reports honestly that it is not implemented yet and names the
-// milestone that will implement it; none of them pretends to succeed.
+// STATUS: milestone M2. Working: version, help, diag (via fwd81diag.exe),
+// enable/disable/uninstall/log (IFEO injection, see ifeo.c). Commands that are
+// not implemented yet report so honestly and name their milestone.
 
 #include <windows.h>
 #include <wchar.h>
+
+#include "out.h"
+#include "ifeo.h"
 
 #define FWD81_STR2(x) #x
 #define FWD81_STR(x)  FWD81_STR2(x)
@@ -21,42 +24,26 @@
 #define FWD81_EXIT_USAGE           1
 #define FWD81_EXIT_NOT_IMPLEMENTED 2
 
-// Writing UTF-16 text so that it survives both a console window and a redirect
-// into a file. WriteConsoleW only works on a real console handle; when stdout is
-// redirected we have to convert to UTF-8 ourselves, otherwise Russian text turns
-// into garbage in the log the user sends us.
-static void OutText(const wchar_t *text)
+// Есть ли среди аргументов флаг --dry-run.
+static int HasDryRun(int argc, wchar_t **argv)
 {
-    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD  mode;
-    DWORD  written;
-    size_t length;
-    int    bytes;
-    char  *utf8;
-
-    if (out == NULL || out == INVALID_HANDLE_VALUE)
-        return;
-
-    length = wcslen(text);
-    if (length == 0)
-        return;
-
-    if (GetConsoleMode(out, &mode)) {
-        WriteConsoleW(out, text, (DWORD)length, &written, NULL);
-        return;
+    int i;
+    for (i = 2; i < argc; i++) {
+        if (_wcsicmp(argv[i], L"--dry-run") == 0)
+            return 1;
     }
+    return 0;
+}
 
-    bytes = WideCharToMultiByte(CP_UTF8, 0, text, (int)length, NULL, 0, NULL, NULL);
-    if (bytes <= 0)
-        return;
-
-    utf8 = (char *)HeapAlloc(GetProcessHeap(), 0, (SIZE_T)bytes);
-    if (utf8 == NULL)
-        return;
-
-    WideCharToMultiByte(CP_UTF8, 0, text, (int)length, utf8, bytes, NULL, NULL);
-    WriteFile(out, utf8, (DWORD)bytes, &written, NULL);
-    HeapFree(GetProcessHeap(), 0, utf8);
+// Первый аргумент после команды, не начинающийся с "-" (имя программы).
+static const wchar_t *FirstOperand(int argc, wchar_t **argv)
+{
+    int i;
+    for (i = 2; i < argc; i++) {
+        if (argv[i][0] != L'-')
+            return argv[i];
+    }
+    return NULL;
 }
 
 static void PrintVersion(void)
@@ -77,18 +64,21 @@ static void PrintUsage(void)
         L"  version              версия и состояние сборки\n"
         L"  help                 эта справка\n"
         L"  diag [--verbose] <exe>  разбор программы: запустится ли она на 8.1\n"
+        L"  enable [--dry-run] <exe>   включить Fwd81 для программы (реестр + System32)\n"
+        L"  disable [--dry-run] <exe>  выключить Fwd81 для программы\n"
+        L"  uninstall [--dry-run]      убрать fwd81core.dll из System32 и все ключи IFEO\n"
+        L"  log                        показать журнал работы ядра\n"
+        L"\n"
+        L"  enable/disable/uninstall меняют систему и требуют прав администратора.\n"
+        L"  --dry-run показывает, что будет сделано, ничего не записывая.\n"
         L"\n"
         L"Запланировано (сейчас команда честно откажется работать):\n"
-        L"  enable <exe>         включить Fwd81 для программы через реестр    [веха M2]\n"
-        L"  disable <exe>        выключить Fwd81 для программы                [веха M2]\n"
         L"  run <exe> [аргументы]  разовый запуск без записи в реестр         [веха M3]\n"
         L"  patch <exe>          понизить требование к версии Windows в файле [веха M6]\n"
         L"  list                 список программ, для которых включён Fwd81   [веха M6]\n"
-        L"  log                  показать журнал работы ядра                  [веха M2]\n"
-        L"  uninstall            убрать fwd81core.dll из System32 и очистить\n"
-        L"                       все ключи реестра IFEO                        [веха M2]\n"
         L"\n"
-        L"Коды возврата: 0 — успех, 1 — ошибка в команде, 2 — ещё не реализовано.\n");
+        L"Коды возврата: 0 успех, 1 ошибка в команде, 2 ещё не реализовано,\n"
+        L"6 нужны права администратора, 7 операция не удалась.\n");
 }
 
 static int NotImplemented(const wchar_t *message)
@@ -185,9 +175,29 @@ int wmain(int argc, wchar_t **argv)
         return RunDiag(argc, argv);
     }
 
-    if (_wcsicmp(command, L"enable") == 0 || _wcsicmp(command, L"disable") == 0)
-        return NotImplemented(L"Команды `enable` и `disable` появятся в вехе M2\n"
-                              L"(внедрение ядра через реестр Image File Execution Options).\n");
+    if (_wcsicmp(command, L"enable") == 0) {
+        const wchar_t *exe = FirstOperand(argc, argv);
+        if (exe == NULL) {
+            OutText(L"Использование: fwd81cli enable [--dry-run] <путь-или-имя.exe>\n");
+            return FWD81_EXIT_USAGE;
+        }
+        return Fwd81Enable(exe, HasDryRun(argc, argv));
+    }
+
+    if (_wcsicmp(command, L"disable") == 0) {
+        const wchar_t *exe = FirstOperand(argc, argv);
+        if (exe == NULL) {
+            OutText(L"Использование: fwd81cli disable [--dry-run] <путь-или-имя.exe>\n");
+            return FWD81_EXIT_USAGE;
+        }
+        return Fwd81Disable(exe, HasDryRun(argc, argv));
+    }
+
+    if (_wcsicmp(command, L"uninstall") == 0)
+        return Fwd81Uninstall(HasDryRun(argc, argv));
+
+    if (_wcsicmp(command, L"log") == 0)
+        return Fwd81ShowLog();
 
     if (_wcsicmp(command, L"run") == 0)
         return NotImplemented(L"Команда `run` появится в вехе M3 (разовый запуск без реестра).\n");
@@ -198,14 +208,6 @@ int wmain(int argc, wchar_t **argv)
 
     if (_wcsicmp(command, L"list") == 0)
         return NotImplemented(L"Команда `list` появится в вехе M6 (профили программ).\n");
-
-    if (_wcsicmp(command, L"log") == 0)
-        return NotImplemented(L"Команда `log` появится в вехе M2 (журнал работы ядра).\n");
-
-    if (_wcsicmp(command, L"uninstall") == 0)
-        return NotImplemented(L"Команда `uninstall` появится в вехе M2.\n"
-                              L"Она уберёт fwd81core.dll из System32 и вычистит все ключи\n"
-                              L"реестра IFEO, которые создавал Fwd81. Удаление будет полным.\n");
 
     OutText(L"Неизвестная команда. Запусти `fwd81cli help`.\n");
     return FWD81_EXIT_USAGE;

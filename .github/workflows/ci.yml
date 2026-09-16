@@ -88,6 +88,25 @@ jobs:
           # Иначе шаг унаследовал бы ненулевой код возврата fwd81diag и упал бы зря.
           exit 0
 
+      - name: ядро загружается в процесс и пишет журнал
+        shell: pwsh
+        run: |
+          # Загружаем ядро через LoadLibrary (срабатывает DLL_PROCESS_ATTACH) —
+          # это проверяет журналирование без всякой записи в System32 и реестр.
+          $log = "$env:LOCALAPPDATA\Fwd81\logs\fwd81.log"
+          if (Test-Path $log) { Remove-Item $log -Force }
+          $sig = @'
+          [DllImport("kernel32", CharSet=CharSet.Unicode, SetLastError=true)] public static extern System.IntPtr LoadLibraryW(string path);
+          [DllImport("kernel32")] public static extern bool FreeLibrary(System.IntPtr h);
+          '@
+          $k = Add-Type -MemberDefinition $sig -Name L -Namespace W -PassThru
+          $h = $k::LoadLibraryW("$PWD\build\bin\Release\fwd81core.dll")
+          if ($h -eq [System.IntPtr]::Zero) { throw "fwd81core.dll не загрузился" }
+          [void]$k::FreeLibrary($h)
+          if (-not (Test-Path $log)) { throw "ядро не записало журнал при загрузке" }
+          Get-Content -Encoding UTF8 $log
+          .\build\bin\Release\fwd81cli.exe log
+
       - name: Сохранить собранное
         uses: actions/upload-artifact@v4
         with:

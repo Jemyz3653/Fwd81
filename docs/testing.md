@@ -188,8 +188,66 @@ py -3 tools\exportdiff\exportdiff.py all
 
 ---
 
+## Веха M2 — ядро и журнал. Проверка на этой машine
+
+### 1. Ядро пишет журнал при загрузке (безопасно, без прав администратора)
+
+Загружаем ядро в процесс через `LoadLibrary` — это НЕ трогает System32 и реестр:
+
+```powershell
+$log = "$env:LOCALAPPDATA\Fwd81\logs\fwd81.log"
+if (Test-Path $log) { Remove-Item $log -Force }
+$sig = '[DllImport("kernel32", CharSet=CharSet.Unicode)] public static extern System.IntPtr LoadLibraryW(string p); [DllImport("kernel32")] public static extern bool FreeLibrary(System.IntPtr h);'
+$k = Add-Type -MemberDefinition $sig -Name L -Namespace W -PassThru
+$h = $k::LoadLibraryW("C:\Fwd81\build\bin\Release\fwd81core.dll")
+[void]$k::FreeLibrary($h)
+C:\Fwd81\build\bin\Release\fwd81cli.exe log
+```
+
+Ожидается: в журнале две строки — «загружено в процесс» и «выгружено из процесса»,
+с временем, `pid=` и `image=...powershell.exe`. Кириллица читается.
+
+### 2. План внедрения без записи (безопасно)
+
+```powershell
+C:\Fwd81\build\bin\Release\fwd81cli.exe enable --dry-run notepad.exe
+C:\Fwd81\build\bin\Release\fwd81cli.exe uninstall --dry-run
+```
+
+Ожидается: показан план (копирование в System32, ключ IFEO), затем «это dry-run:
+ничего не записано». Система не меняется.
+
+---
+
+## Веха M2 — проверка внедрения через IFEO *(меняет систему, нужно разрешение или ВМ)*
+
+Это единственная часть M2, которую нельзя проверить, ничего не меняя: `enable`
+пишет `fwd81core.dll` в `C:\Windows\System32` и ключи в `HKLM` (нужны права
+администратора). Делать это на рабочей машине — только с явного согласия Арсения;
+правильнее — на виртуальной машине с 8.1.
+
+Порядок проверки (на подопытной, заведомо безобидной программе):
+
+```powershell
+# от имени администратора:
+fwd81cli enable app.exe          # включить
+app.exe                          # запустить программу
+fwd81cli log                     # ожидается строка «загружено в процесс ... image=...app.exe»
+fwd81cli disable app.exe         # выключить
+fwd81cli uninstall               # убрать наш файл из System32 и все ключи IFEO
+```
+
+**Успех** = после `enable` в журнале появляется факт загрузки ядра именно в целевую
+программу (а не только в наш тестовый LoadLibrary). Это доказывает, что механизм
+`VerifierDlls` действительно подхватывает наш файл из System32 — открытый вопрос №1
+из [architecture.md](architecture.md) закрывается только этим опытом.
+
+**Откат** обязателен после проверки: `uninstall` должен убрать всё начисто (проверить,
+что `fwd81core.dll` в System32 исчез и наших ключей IFEO не осталось).
+
+---
+
 ## Сценарии следующих вех
 
-- **M2** — факт загрузки ядра в чужой процесс, видимый в журнале.
 - **M3** — `tests/synthetic`: программа, нарочно импортирующая отсутствующую в 8.1
   функцию. Контрольный пример «работает / не работает».

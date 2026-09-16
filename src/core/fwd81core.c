@@ -21,6 +21,8 @@
 
 #include <windows.h>
 
+#include "fwd81log.h"
+
 // Entry point of the DLL. Named via /ENTRY:Fwd81CoreEntry so that the linker
 // does not pull in _DllMainCRTStartup (which initialises the CRT we do not have).
 // The Windows loader calls it with the same three arguments as DllMain.
@@ -34,11 +36,15 @@ BOOL WINAPI Fwd81CoreEntry(HINSTANCE instance, DWORD reason, LPVOID reserved)
 
     switch (reason) {
     case DLL_PROCESS_ATTACH:
-        // M2: install the loader hooks here -- registration only, see rule 2.
+        // M2: пока единственное дело ядра — записать факт своей загрузки.
+        // Это только запись в журнал через ntdll: ни LoadLibrary, ни ожиданий,
+        // ни обращений к чужим модулям — правило про loader lock соблюдено.
+        // Перехваты загрузчика появятся в M3 (тоже как регистрация).
+        Fwd81LogEvent("info", L"ядро fwd81core загружено в процесс");
         break;
 
     case DLL_PROCESS_DETACH:
-        // M2: nothing to undo yet.
+        Fwd81LogEvent("info", L"ядро fwd81core выгружено из процесса");
         break;
 
     default:
