@@ -248,7 +248,8 @@ static void EnsureDirectory(const WCHAR *nt_path, ULONG nt_len)
 
 // --- Публичная функция --------------------------------------------------------
 
-void Fwd81LogEvent(const char *level, const wchar_t *event)
+static void LogEventImpl(const char *level, const wchar_t *event,
+                         int has_number, unsigned long long number)
 {
     WCHAR dir_path[600];
     WCHAR file_path[620];
@@ -315,6 +316,8 @@ void Fwd81LogEvent(const char *level, const wchar_t *event)
             event_len++;
         BufAppendWide(&line, event, event_len);
     }
+    if (has_number)
+        BufAppendUnsigned(&line, number, 1);
     BufAppendAsciiZ(&line, " image=");
     AppendProcessImage(&line);
     BufAppendAsciiZ(&line, "\n");
@@ -337,4 +340,14 @@ void Fwd81LogEvent(const char *level, const wchar_t *event)
     offset.HighPart = FWD81_WRITE_TO_END_HIGH;
     NtWriteFile(handle, NULL, NULL, NULL, &iosb, line.data, line.length, &offset, NULL);
     NtClose(handle);
+}
+
+void Fwd81LogEvent(const char *level, const wchar_t *event)
+{
+    LogEventImpl(level, event, 0, 0);
+}
+
+void Fwd81LogEventNum(const char *level, const wchar_t *event, unsigned long long number)
+{
+    LogEventImpl(level, event, 1, number);
 }

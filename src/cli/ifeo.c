@@ -33,6 +33,29 @@ static int IsElevated(void)
     return result;
 }
 
+// --- Чёрный список критических процессов --------------------------------------
+//
+// Для этих имён enable обязан отказать ЖЁСТКО, без обхода флагом. Сломанное ядро
+// внутри любого из них означает незагружающуюся систему и восстановление с
+// флешки. Список — процессы, без которых Windows не стартует, плюс оболочка.
+
+static const wchar_t *const kProtectedImages[] = {
+    L"winlogon.exe", L"csrss.exe", L"lsass.exe", L"services.exe",
+    L"smss.exe", L"wininit.exe", L"explorer.exe", L"svchost.exe",
+    L"dwm.exe", L"taskhostw.exe",
+    NULL
+};
+
+static int IsProtectedImage(const wchar_t *image_name)
+{
+    int i;
+    for (i = 0; kProtectedImages[i] != NULL; i++) {
+        if (_wcsicmp(image_name, kProtectedImages[i]) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 // --- Пути ---------------------------------------------------------------------
 
 // Только имя файла из пути: "C:\a\b\app.exe" -> "app.exe".
@@ -147,6 +170,16 @@ int Fwd81Enable(const wchar_t *image_name_arg, int dry_run)
         OutLine(L"Не указано имя программы.");
         return FWD81_IFEO_USAGE;
     }
+
+    // Жёсткий отказ для критических процессов — до всего остального и без обхода.
+    if (IsProtectedImage(image)) {
+        OutText(L"ОТКАЗ: "); OutText(image);
+        OutLine(L" — критический процесс Windows.");
+        OutLine(L"Включать Fwd81 для него запрещено: сбой ядра в нём сделает систему");
+        OutLine(L"незагружаемой. Это правило без обхода флагом.");
+        return FWD81_IFEO_FAILED;
+    }
+
     if (!SelfDirCoreDll(src, MAX_PATH) || !System32CoreDll(dst, MAX_PATH)) {
         OutLine(L"Не удалось определить пути к fwd81core.dll.");
         return FWD81_IFEO_FAILED;

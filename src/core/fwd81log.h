@@ -21,4 +21,10 @@
 // образу. Ничего не возвращает и никогда не бросает исключений.
 void Fwd81LogEvent(const char *level, const wchar_t *event);
 
+// То же, но с числом сразу после текста события (без пробела). Нужно, чтобы
+// записать числовую причину вызова точки входа: "...reason=4". Число в журнале
+// доказывает, ЧТО именно произошло, а не полагается на слова.
+void Fwd81LogEventNum(const char *level, const wchar_t *event,
+                      unsigned long long number);
+
 #endif // FWD81LOG_H
