@@ -1,0 +1,7 @@
+; SPDX-License-Identifier: MIT
+; Импорт-библиотека: функция Fwd81AbsentProcedure якобы из kernel32.dll. Сама DLL
+; есть, а функции в ней нет — при загрузке LdrGetProcedureAddress вернёт отказ.
+; Это отказ №3 («точка входа не найдена») тем же статическим путём.
+LIBRARY kernel32
+EXPORTS
+    Fwd81AbsentProcedure

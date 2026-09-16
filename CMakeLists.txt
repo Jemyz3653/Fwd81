@@ -80,4 +80,9 @@ add_subdirectory(src/core)
 add_subdirectory(src/cli)
 add_subdirectory(src/diag)
 
+option(FWD81_BUILD_TESTS "Собирать контрольные примеры из tests/" ON)
+if(FWD81_BUILD_TESTS)
+    add_subdirectory(tests/synthetic)
+endif()
+
 message(STATUS "Fwd81 ${PROJECT_VERSION}: цели — fwd81core.dll, fwd81cli.exe, fwd81diag.exe")
