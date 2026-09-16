@@ -11,7 +11,8 @@
 add_executable(fwd81cli
     main.c
     out.c
-    ifeo.c)
+    ifeo.c
+    run.c)
 
 # MultiThreaded / MultiThreadedDebug = статическая CRT (/MT, /MTd).
 set_target_properties(fwd81cli PROPERTIES

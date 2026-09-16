@@ -40,3 +40,10 @@ endfunction()
 
 fwd81_add_synthetic(synthetic_absent_dll  synthetic_absent_dll.c  "${ABSENT_DLL_LIB}")
 fwd81_add_synthetic(synthetic_absent_proc synthetic_absent_proc.c "${ABSENT_PROC_LIB}")
+
+# Третья программа — отложенная загрузка той же несуществующей DLL. Отличается
+# только флагами компоновки: та же импорт-библиотека, но DLL помечена как
+# delay-load, поэтому её загрузка откладывается до первого вызова функции.
+fwd81_add_synthetic(synthetic_delay_absent synthetic_delay_absent.c "${ABSENT_DLL_LIB}")
+target_link_libraries(synthetic_delay_absent PRIVATE delayimp)
+target_link_options(synthetic_delay_absent PRIVATE "/DELAYLOAD:fwd81_absent.dll")

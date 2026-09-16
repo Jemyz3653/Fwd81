@@ -11,6 +11,7 @@
 
 #include "out.h"
 #include "ifeo.h"
+#include "run.h"
 
 #define FWD81_STR2(x) #x
 #define FWD81_STR(x)  FWD81_STR2(x)
@@ -68,12 +69,14 @@ static void PrintUsage(void)
         L"  disable [--dry-run] <exe>  выключить Fwd81 для программы\n"
         L"  uninstall [--dry-run]      убрать fwd81core.dll из System32 и все ключи IFEO\n"
         L"  log                        показать журнал работы ядра\n"
+        L"  run <exe> [аргументы]      разовый запуск с внедрением ядра, без реестра\n"
         L"\n"
         L"  enable/disable/uninstall меняют систему и требуют прав администратора.\n"
         L"  --dry-run показывает, что будет сделано, ничего не записывая.\n"
+        L"  run — инструмент разработки: чинит delay-load и рантайм LoadLibrary,\n"
+        L"        но НЕ статические импорты EXE (это только путь IFEO).\n"
         L"\n"
         L"Запланировано (сейчас команда честно откажется работать):\n"
-        L"  run <exe> [аргументы]  разовый запуск без записи в реестр         [веха M3]\n"
         L"  patch <exe>          понизить требование к версии Windows в файле [веха M6]\n"
         L"  list                 список программ, для которых включён Fwd81   [веха M6]\n"
         L"\n"
@@ -200,7 +203,7 @@ int wmain(int argc, wchar_t **argv)
         return Fwd81ShowLog();
 
     if (_wcsicmp(command, L"run") == 0)
-        return NotImplemented(L"Команда `run` появится в вехе M3 (разовый запуск без реестра).\n");
+        return Fwd81Run(argc, argv);
 
     if (_wcsicmp(command, L"patch") == 0)
         return NotImplemented(L"Команда `patch` появится в вехе M6\n"
