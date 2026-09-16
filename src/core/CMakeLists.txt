@@ -17,7 +17,8 @@ string(REPLACE "/RTC1" "" CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
 add_library(fwd81core SHARED
     fwd81core.c
     fwd81log.c
-    fwd81_mem.c)
+    fwd81_mem.c
+    fwd81resolve.c)
 
 # Пустое значение = не добавлять флаг выбора библиотеки языка C (/MD, /MDd, /MT).
 set_target_properties(fwd81core PROPERTIES MSVC_RUNTIME_LIBRARY "")
