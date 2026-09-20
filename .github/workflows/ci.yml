@@ -67,6 +67,12 @@ jobs:
           .\build\bin\Release\fwd81cli.exe version
           if ($LASTEXITCODE -ne 0) { throw "fwd81cli version вернул $LASTEXITCODE" }
 
+      - name: Одноразовый измеритель не попал в боевое ядро
+        shell: pwsh
+        run: |
+          python tools/check_no_experiment.py build/bin/Debug/fwd81core.dll
+          python tools/check_no_experiment.py build/bin/Release/fwd81core.dll
+
       - name: docs/coverage.md соответствует пометкам в src/libs
         shell: pwsh
         run: python tools/exportdiff/exportdiff.py check

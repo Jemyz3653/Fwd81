@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //
+// ==========================================================================
+//  ОДНОРАЗОВЫЙ ИЗМЕРИТЕЛЬ. НИКОГДА НЕ ПОПАДАЕТ В БОЕВУЮ СБОРКУ.
+//  Компилируется только под опцией CMake FWD81_LDR_EXPERIMENT (по умолчанию
+//  ВЫКЛ). За тем, чтобы метки этого файла не было в обычном ядре, следит
+//  tools/check_no_experiment.py в CI.
+// ==========================================================================
+//
 // Реализация инструментовки загрузчика. Только ntdll, без CRT. См. .h.
 //
-// Целевые адреса сняты статическим анализом (dbh + capstone) с ntdll ЭТОЙ
-// машины (Windows 11, 10.0.26100.8328). На другой сборке ntdll адреса иные,
-// поэтому перед расстановкой точек проверяется отпечаток сборки (TimeDateStamp);
-// не совпал — точки не ставим, пишем в журнал и выходим (fail-safe).
+// Целевые адреса зашиты под КОНКРЕТНУЮ сборку ntdll (Windows 11, 10.0.26100.8328)
+// — их нельзя достать из экспортируемых обёрток, потому что статический путь
+// идёт через внутренние функции (LdrpLoadDependentModuleInternal, снаппинг), до
+// которых обёртки не ведут. На 8.1 адреса будут ДРУГИМИ; этот измеритель на 8.1
+// не рассчитан и там неактивен. Перед расстановкой точек — строгая защёлка по
+// трём полям заголовка (TimeDateStamp + SizeOfImage + CheckSum); не сошлось —
+// ни одной точки, запись «инструментовка неактивна» (fail-safe).
 
 #include <windows.h>
 #include <winternl.h>
@@ -15,7 +25,18 @@
 
 // --- Отпечаток и адреса целевой ntdll (RVA от базы модуля) --------------------
 
+// Строгая защёлка: адреса верны ТОЛЬКО для этой сборки ntdll. Проверяем три
+// независимых поля заголовка — случайно совпасть всем сразу почти невозможно.
+// Не сошлось хоть одно — точки НЕ ставятся вовсе (см. Fwd81LdrProbeArm).
 #define FWD81_NTDLL_TIMESTAMP 0x0022B8E0u  // Win11 10.0.26100.8328
+#define FWD81_NTDLL_SIZEOFIMG 0x00267000u
+#define FWD81_NTDLL_CHECKSUM  0x0026A960u
+
+// Уникальная метка одноразового измерителя. За тем, чтобы её НЕ было в боевой
+// сборке ядра, следит tools/check_no_experiment.py в CI. Этот файл компилируется
+// только под опцией FWD81_LDR_EXPERIMENT (см. src/core/CMakeLists.txt).
+const char FWD81_LDR_EXPERIMENT_MARKER[] =
+    "FWD81_LDR_EXPERIMENT_MARKER_DO_NOT_SHIP";
 
 // Функции загрузчика (RVA). Порядок = номер DR-регистра.
 #define RVA_LdrpLoadDependentModuleInternal 0x0000d2e0u  // загрузка статической зависимости (отказ №2)
@@ -95,16 +116,23 @@ static PVOID GetNtdllBase(void)
     return NULL;
 }
 
-static DWORD NtdllTimeDateStamp(PVOID base)
+// Считать три поля заголовка ntdll и сравнить с зашитыми. TRUE — сборка та.
+static BOOL NtdllSignatureMatches(PVOID base, DWORD *ts, DWORD *size, DWORD *sum)
 {
     const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)base;
     const IMAGE_NT_HEADERS *nt;
+    *ts = 0; *size = 0; *sum = 0;
     if (dos->e_magic != IMAGE_DOS_SIGNATURE)
-        return 0;
+        return FALSE;
     nt = (const IMAGE_NT_HEADERS *)((const BYTE *)base + dos->e_lfanew);
     if (nt->Signature != IMAGE_NT_SIGNATURE)
-        return 0;
-    return nt->FileHeader.TimeDateStamp;
+        return FALSE;
+    *ts   = nt->FileHeader.TimeDateStamp;
+    *size = nt->OptionalHeader.SizeOfImage;
+    *sum  = nt->OptionalHeader.CheckSum;
+    return (*ts == FWD81_NTDLL_TIMESTAMP &&
+            *size == FWD81_NTDLL_SIZEOFIMG &&
+            *sum == FWD81_NTDLL_CHECKSUM);
 }
 
 // --- Установка debug-регистров на текущем потоке -------------------------------
@@ -189,7 +217,11 @@ void Fwd81LdrProbeDisarm(void)
 void Fwd81LdrProbeArm(int arm_real)
 {
     PVOID base;
-    DWORD stamp;
+    DWORD ts, size, sum;
+
+    // Ссылка на метку, чтобы линкер не выкинул её из бинарника (для CI-сторожа).
+    if (FWD81_LDR_EXPERIMENT_MARKER[0] == 0)
+        return;
 
     if (InterlockedCompareExchange(&g_armed, 1, 0) != 0)
         return;  // уже сработало
@@ -215,17 +247,19 @@ void Fwd81LdrProbeArm(int arm_real)
         return;
     }
 
-    // 2. Страховка: адреса сняты под конкретную сборку ntdll.
+    // 2. Строгая защёлка: адреса сняты под конкретную сборку ntdll. Не сошлось
+    //    хоть одно поле — НЕ ставим ни одной точки (никакого тихого продолжения
+    //    с частично неверными адресами).
     base = GetNtdllBase();
     if (base == NULL) {
-        Fwd81LogEvent("error", L"ldrprobe: не нашёл базу ntdll — точки не ставлю");
+        Fwd81LogEvent("error", L"ldrprobe: не нашёл базу ntdll — инструментовка НЕактивна");
         return;
     }
-    stamp = NtdllTimeDateStamp(base);
-    if (stamp != FWD81_NTDLL_TIMESTAMP) {
-        Fwd81LogEventNum("info",
-            L"ldrprobe: ntdll другой сборки (адреса не для неё), точки НЕ ставлю; TimeDateStamp=",
-            (unsigned long long)stamp);
+    if (!NtdllSignatureMatches(base, &ts, &size, &sum)) {
+        Fwd81LogEvent("info", L"ldrprobe: сборка ntdll не та — инструментовка НЕактивна, точки не ставлю");
+        Fwd81LogEventNum("info", L"ldrprobe:   TimeDateStamp=", (unsigned long long)ts);
+        Fwd81LogEventNum("info", L"ldrprobe:   SizeOfImage=",   (unsigned long long)size);
+        Fwd81LogEventNum("info", L"ldrprobe:   CheckSum=",      (unsigned long long)sum);
         return;
     }
 

@@ -122,23 +122,29 @@ BOOL WINAPI Fwd81CoreEntry(HINSTANCE instance, DWORD reason, LPVOID reserved)
         } else {
             Fwd81LogEvent("error", L"DLL_PROCESS_VERIFIER без указателя на описатель — провайдер НЕ зарегистрирован");
         }
-        // M3 (эксперимент): расставить точки останова ДО того, как загрузчик
-        // начнёт снаппинг статических импортов главного образа. Под IFEO это
-        // самый ранний момент, куда мы успеваем — здесь реальные точки нужны.
+        // M3 (эксперимент, только под FWD81_LDR_EXPERIMENT): расставить точки
+        // останова ДО снаппинга статических импортов главного образа. Под IFEO
+        // это самый ранний момент, куда мы успеваем — здесь реальные точки нужны.
+#ifdef FWD81_LDR_EXPERIMENT
         Fwd81LdrProbeArm(1 /* arm_real */);
+#endif
         break;
 
     case DLL_PROCESS_ATTACH:
         // M3: сюда встанут перехваты загрузчика — тоже как регистрация.
         Fwd81LogEventNum("info", L"точка входа ядра, reason=", (unsigned long long)reason);
+#ifdef FWD81_LDR_EXPERIMENT
         // Под `run`/LoadLibrary VERIFIER не приходит. Реальные точки тут бесполезны
         // и опасны — только самопроверка. Единожды: внутри стоит защёлка.
         Fwd81LdrProbeArm(0 /* arm_real */);
+#endif
         break;
 
     case DLL_PROCESS_DETACH:
         Fwd81LogEventNum("info", L"точка входа ядра, reason=", (unsigned long long)reason);
+#ifdef FWD81_LDR_EXPERIMENT
         Fwd81LdrProbeDisarm();  // снять точки и обработчик до выгрузки ядра
+#endif
         break;
 
     default:

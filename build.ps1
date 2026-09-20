@@ -18,7 +18,8 @@ param(
     [string]$Config = 'Both',
 
     [switch]$Clean,
-    [switch]$NoChecks
+    [switch]$NoChecks,
+    [switch]$Experiment
 )
 
 $ErrorActionPreference = 'Stop'
@@ -144,8 +145,10 @@ if ($Clean -and (Test-Path $buildDir)) {
 
 Write-Step 'Настройка сборки'
 
+if ($Experiment) { $experimentFlag = 'ON' } else { $experimentFlag = 'OFF' }
 & $cmakePath -S $root -B $buildDir -G 'Ninja Multi-Config' `
     "-DCMAKE_MAKE_PROGRAM=$ninjaPath" `
+    "-DFWD81_LDR_EXPERIMENT=$experimentFlag" `
     '-DCMAKE_C_COMPILER=cl'
 if ($LASTEXITCODE -ne 0) {
     Stop-WithError 'cmake не смог настроить сборку. Текст ошибки выше.'
@@ -194,6 +197,17 @@ if (-not $NoChecks) {
         & $interpreter @pythonArguments (Join-Path $root 'tools\check_licenses.py')
         if ($LASTEXITCODE -ne 0) {
             Stop-WithError 'лицензионная граница нарушена, список выше. Правила — в docs/licensing.md.'
+        }
+
+        if (-not $Experiment) {
+            foreach ($configuration in $configurations) {
+                Write-Step "Проверка: нет экспериментального измерителя ($configuration)"
+                & $interpreter @pythonArguments (Join-Path $root 'tools\check_no_experiment.py') `
+                    (Join-Path $buildDir "bin\$configuration\fwd81core.dll")
+                if ($LASTEXITCODE -ne 0) {
+                    Stop-WithError 'одноразовый измеритель просочился в сборку, см. выше.'
+                }
+            }
         }
 
         foreach ($configuration in $configurations) {

@@ -18,8 +18,16 @@ add_library(fwd81core SHARED
     fwd81core.c
     fwd81log.c
     fwd81_mem.c
-    fwd81resolve.c
-    fwd81probe_ldr.c)
+    fwd81resolve.c)
+
+# Одноразовый измеритель загрузчика (эксперимент M3) — компилируется ТОЛЬКО под
+# опцией FWD81_LDR_EXPERIMENT (по умолчанию ВЫКЛ). В боевую сборку не попадает.
+# CI (tools/check_no_experiment.py) следит, чтобы его метки не было в обычном ядре.
+if(FWD81_LDR_EXPERIMENT)
+    target_sources(fwd81core PRIVATE fwd81probe_ldr.c)
+    target_compile_definitions(fwd81core PRIVATE FWD81_LDR_EXPERIMENT)
+    message(STATUS "fwd81core: ВКЛЮЧЁН одноразовый измеритель загрузчика (эксперимент M3)")
+endif()
 
 # Пустое значение = не добавлять флаг выбора библиотеки языка C (/MD, /MDd, /MT).
 set_target_properties(fwd81core PROPERTIES MSVC_RUNTIME_LIBRARY "")

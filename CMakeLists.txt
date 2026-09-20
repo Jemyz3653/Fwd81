@@ -80,6 +80,11 @@ add_subdirectory(src/core)
 add_subdirectory(src/cli)
 add_subdirectory(src/diag)
 
+# Одноразовый измеритель загрузчика (эксперимент M3). По умолчанию ВЫКЛ: в
+# боевую сборку экспериментальный код с зашитыми под конкретную ntdll адресами
+# не попадает. Включается вручную только для замера: build.ps1 -Experiment.
+option(FWD81_LDR_EXPERIMENT "Вкомпилировать одноразовый измеритель загрузчика (НЕ для релиза)" OFF)
+
 option(FWD81_BUILD_TESTS "Собирать контрольные примеры из tests/" ON)
 if(FWD81_BUILD_TESTS)
     add_subdirectory(tests/synthetic)
