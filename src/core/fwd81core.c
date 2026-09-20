@@ -22,6 +22,7 @@
 #include <windows.h>
 
 #include "fwd81log.h"
+#include "fwd81probe_ldr.h"
 
 // DLL_PROCESS_VERIFIER may be missing from older SDK headers.
 #ifndef DLL_PROCESS_VERIFIER
@@ -121,11 +122,18 @@ BOOL WINAPI Fwd81CoreEntry(HINSTANCE instance, DWORD reason, LPVOID reserved)
         } else {
             Fwd81LogEvent("error", L"DLL_PROCESS_VERIFIER без указателя на описатель — провайдер НЕ зарегистрирован");
         }
+        // M3 (эксперимент): расставить точки останова ДО того, как загрузчик
+        // начнёт снаппинг статических импортов главного образа. Под IFEO это
+        // самый ранний момент, куда мы успеваем.
+        Fwd81LdrProbeArm();
         break;
 
     case DLL_PROCESS_ATTACH:
         // M3: сюда встанут перехваты загрузчика — тоже как регистрация.
         Fwd81LogEventNum("info", L"точка входа ядра, reason=", (unsigned long long)reason);
+        // Под `run` (внедрение без реестра) VERIFIER не приходит — арм здесь.
+        // Единожды: внутри стоит защёлка.
+        Fwd81LdrProbeArm();
         break;
 
     case DLL_PROCESS_DETACH:

@@ -18,7 +18,8 @@ add_library(fwd81core SHARED
     fwd81core.c
     fwd81log.c
     fwd81_mem.c
-    fwd81resolve.c)
+    fwd81resolve.c
+    fwd81probe_ldr.c)
 
 # Пустое значение = не добавлять флаг выбора библиотеки языка C (/MD, /MDd, /MT).
 set_target_properties(fwd81core PROPERTIES MSVC_RUNTIME_LIBRARY "")
