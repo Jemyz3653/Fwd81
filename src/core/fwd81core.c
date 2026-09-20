@@ -124,20 +124,21 @@ BOOL WINAPI Fwd81CoreEntry(HINSTANCE instance, DWORD reason, LPVOID reserved)
         }
         // M3 (эксперимент): расставить точки останова ДО того, как загрузчик
         // начнёт снаппинг статических импортов главного образа. Под IFEO это
-        // самый ранний момент, куда мы успеваем.
-        Fwd81LdrProbeArm();
+        // самый ранний момент, куда мы успеваем — здесь реальные точки нужны.
+        Fwd81LdrProbeArm(1 /* arm_real */);
         break;
 
     case DLL_PROCESS_ATTACH:
         // M3: сюда встанут перехваты загрузчика — тоже как регистрация.
         Fwd81LogEventNum("info", L"точка входа ядра, reason=", (unsigned long long)reason);
-        // Под `run` (внедрение без реестра) VERIFIER не приходит — арм здесь.
-        // Единожды: внутри стоит защёлка.
-        Fwd81LdrProbeArm();
+        // Под `run`/LoadLibrary VERIFIER не приходит. Реальные точки тут бесполезны
+        // и опасны — только самопроверка. Единожды: внутри стоит защёлка.
+        Fwd81LdrProbeArm(0 /* arm_real */);
         break;
 
     case DLL_PROCESS_DETACH:
         Fwd81LogEventNum("info", L"точка входа ядра, reason=", (unsigned long long)reason);
+        Fwd81LdrProbeDisarm();  // снять точки и обработчик до выгрузки ядра
         break;
 
     default:

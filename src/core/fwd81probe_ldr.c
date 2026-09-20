@@ -37,10 +37,12 @@
 
 NTSTATUS NTAPI NtSetContextThread(HANDLE Thread, PCONTEXT Context);
 PVOID NTAPI RtlAddVectoredExceptionHandler(ULONG First, PVECTORED_EXCEPTION_HANDLER Handler);
+ULONG NTAPI RtlRemoveVectoredExceptionHandler(PVOID Handle);
 
 // --- Состояние ----------------------------------------------------------------
 
 static volatile LONG g_armed = 0;             // чтобы сработать единожды
+static PVOID g_veh_handle = NULL;             // чтобы снять обработчик на detach
 static ULONG_PTR     g_targets[4] = { 0, 0, 0, 0 };
 static const wchar_t *g_names[4] = {
     L"ldrprobe: сработала LdrpLoadDependentModuleInternal, rip=",
@@ -175,7 +177,16 @@ static void Fwd81BpProbe(void)
 
 // --- Точка сборки -------------------------------------------------------------
 
-void Fwd81LdrProbeArm(void)
+void Fwd81LdrProbeDisarm(void)
+{
+    if (g_veh_handle == NULL)
+        return;
+    SetDebugRegisters(0, 0, 0, 0, 0);  // снять все точки с текущего потока
+    RtlRemoveVectoredExceptionHandler(g_veh_handle);
+    g_veh_handle = NULL;
+}
+
+void Fwd81LdrProbeArm(int arm_real)
 {
     PVOID base;
     DWORD stamp;
@@ -183,7 +194,8 @@ void Fwd81LdrProbeArm(void)
     if (InterlockedCompareExchange(&g_armed, 1, 0) != 0)
         return;  // уже сработало
 
-    if (RtlAddVectoredExceptionHandler(1, Fwd81VectoredHandler) == NULL) {
+    g_veh_handle = RtlAddVectoredExceptionHandler(1, Fwd81VectoredHandler);
+    if (g_veh_handle == NULL) {
         Fwd81LogEvent("error", L"ldrprobe: не удалось поставить обработчик исключений");
         return;
     }
@@ -192,7 +204,16 @@ void Fwd81LdrProbeArm(void)
     SetDebugRegisters((ULONG_PTR)Fwd81BpProbe, 0, 0, 0, 0x1 /* L0 */);
     Fwd81BpProbe();
     g_selftest_hit = 1;
+    SetDebugRegisters(0, 0, 0, 0, 0);  // снять пробную точку
     Fwd81LogEvent("info", L"ldrprobe: самопроверка пройдена (процесс жив)");
+
+    // Реальные точки — только под верификатором (IFEO). Под обычным attach
+    // они бесполезны (не тот поток) и опасны (висячий обработчик), поэтому
+    // ограничиваемся самопроверкой; обработчик снимется на detach.
+    if (!arm_real) {
+        Fwd81LogEvent("info", L"ldrprobe: обычный attach — только самопроверка, реальные точки не ставлю");
+        return;
+    }
 
     // 2. Страховка: адреса сняты под конкретную сборку ntdll.
     base = GetNtdllBase();
